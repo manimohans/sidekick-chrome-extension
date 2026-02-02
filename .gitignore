@@ -1,0 +1,22 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Claude
+CLAUDE.md
+
+# Build artifacts
+*.zip
+_metadata/
+
+# Logs
+*.log
+
+# Design assets (local only)
+canva_assets/

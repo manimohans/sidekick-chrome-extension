@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sidekick Settings</title>
+  <script src="marked.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="options-body">
+  <div class="header">
+    <img src="assets/sidekick-logo-transparent.png" alt="Sidekick Logo" class="logo">
+    <h1>Settings</h1>
+  </div>
+
+  <label for="serverAddress">Server Address:</label>
+  <input type="text" id="serverAddress" placeholder="http://localhost:11434">
+  <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+    Works with Ollama, LM Studio, Llama.cpp, AnythingLLM, vLLM, and any OpenAI-compatible server.
+  </p>
+
+  <label for="modelName">Model Name:</label>
+  <input type="text" id="modelName" placeholder="gemma3:1b, llama3, mistral, etc.">
+
+  <label for="apiEndpoint">API Endpoint:</label>
+  <select id="apiEndpoint">
+    <option value="chat">/v1/chat/completions (OpenAI-compatible)</option>
+    <option value="responses">/v1/responses (Responses API)</option>
+  </select>
+  <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+    Choose based on your server's supported format.
+  </p>
+
+  <label for="systemPrompt">Personalization (optional):</label>
+  <textarea id="systemPrompt" placeholder="e.g., Be concise. You are a helpful coding assistant." rows="3" maxlength="500"></textarea>
+  <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">
+    Customize how Sidekick responds. This is sent as a system prompt. <span id="charCount">0</span>/500
+  </p>
+
+  <button id="saveBtn">Save</button>
+  <button id="testBtn">Test Connection</button>
+
+  <div id="status"></div>
+  <div id="testOutput"></div>
+
+  <div class="faq-section">
+    <h2>Getting Started</h2>
+
+    <div class="faq-item">
+      <div class="faq-question">Quick Setup</div>
+      <div class="faq-answer">
+        <ol>
+          <li>Install and run <a href="https://ollama.ai" target="_blank">Ollama</a> or <a href="https://lmstudio.ai" target="_blank">LM Studio</a></li>
+          <li>Pull a model: <code>ollama pull gemma3:1b</code></li>
+          <li>Enter server address above (default: <code>http://localhost:11434</code>)</li>
+          <li>Enter model name (e.g., <code>gemma3:1b</code>)</li>
+          <li>Click Test Connection to verify</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">How to use</div>
+      <div class="faq-answer">
+        <ol>
+          <li>Click the extension icon to open the sidebar</li>
+          <li>Select text on any webpage (optional)</li>
+          <li>Type your message or choose an action (Summarize, Explain, etc.)</li>
+          <li>Press Enter or click Send</li>
+        </ol>
+      </div>
+    </div>
+
+    <h2>Troubleshooting</h2>
+
+    <div class="faq-item">
+      <div class="faq-question">Q: Test connection works but I get errors in the sidebar?</div>
+      <div class="faq-answer">A: Make sure your LLM server is still running. The model might have been unloaded due to inactivity.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">Q: How do I connect to a server on another machine?</div>
+      <div class="faq-answer">A:
+        <ol>
+          <li>Use the server's IP address (e.g., <code>http://192.168.1.100:11434</code>)</li>
+          <li>For Ollama, set <code>OLLAMA_HOST=0.0.0.0:11434</code> on the server</li>
+          <li>Make sure the port is open in your firewall</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">Q: How do I test if my server is running?</div>
+      <div class="faq-answer">A: Run this in terminal:
+        <pre><code>curl http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gemma3:1b", "messages": [{"role": "user", "content": "hi"}]}'</code></pre>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">Q: What models are available?</div>
+      <div class="faq-answer">A: For Ollama, run <code>ollama list</code> to see installed models. Browse more at <a href="https://ollama.ai/library" target="_blank">ollama.ai/library</a></div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">Q: Responses are slow. How can I improve speed?</div>
+      <div class="faq-answer">A:
+        <ul>
+          <li>Use a smaller model (e.g., <code>gemma3:1b</code> instead of <code>gemma3:27b</code>)</li>
+          <li>Use quantized models (e.g., <code>gemma3:4b-q4_0</code>)</li>
+          <li>Make sure you have enough RAM/VRAM for the model</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="faq-item">
+      <div class="faq-question">Q: "Cannot allocate memory" error?</div>
+      <div class="faq-answer">A: The model is too large for your system. Try a smaller model or one with lower quantization.</div>
+    </div>
+
+    <h2>Supported Servers</h2>
+
+    <div class="faq-item">
+      <div class="faq-answer">
+        This extension supports two API formats:
+        <ul>
+          <li><strong>/v1/chat/completions</strong> - OpenAI Chat Completions format</li>
+          <li><strong>/v1/responses</strong> - OpenAI Responses API format</li>
+        </ul>
+        <p style="margin-top: 12px;"><strong>Compatible servers:</strong></p>
+        <ul>
+          <li><strong>Ollama</strong> - Port 11434 (Both formats)</li>
+          <li><strong>LM Studio</strong> - Enable "Local Server" (Both formats)</li>
+          <li><strong>llama.cpp</strong> - Run with <code>--api</code> flag</li>
+          <li><strong>vLLM</strong> - Port 8000</li>
+          <li><strong>AnythingLLM</strong> - Check server settings</li>
+        </ul>
+        <p style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">Check your server's documentation for supported endpoints.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>
