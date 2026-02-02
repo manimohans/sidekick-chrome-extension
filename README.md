@@ -100,7 +100,7 @@ Sidekick is designed with privacy as a core principle:
 - **No Tracking** — No analytics, telemetry, or usage data collection
 - **No Account** — No sign-up or API keys required
 
-See [PRIVACY_POLICY.md](PRIVACY_POLICY.md) for details.
+Your data never leaves your device.
 
 ## Development
 
