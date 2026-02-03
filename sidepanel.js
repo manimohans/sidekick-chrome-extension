@@ -9,9 +9,13 @@ document.addEventListener('DOMContentLoaded', async function() {
     const selectionPreview = document.getElementById('selectionPreview');
     const welcome = document.getElementById('welcome');
     const autocompleteDropdown = document.getElementById('autocompleteDropdown');
+    const imagePreview = document.getElementById('imagePreview');
+    const previewImg = document.getElementById('previewImg');
+    const removeImageBtn = document.getElementById('removeImageBtn');
 
     let currentAssistantMessage = null;
     let autocompleteIndex = -1;
+    let currentImageData = null; // Base64 image data
     let streamText = '';
     let selectedText = '';
     let isGenerating = false;
@@ -425,6 +429,43 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
     });
 
+    // Image handling functions
+    function showImagePreview(dataUrl) {
+        currentImageData = dataUrl;
+        previewImg.src = dataUrl;
+        imagePreview.classList.add('visible');
+    }
+
+    function clearImagePreview() {
+        currentImageData = null;
+        previewImg.src = '';
+        imagePreview.classList.remove('visible');
+    }
+
+    // Handle paste for images
+    messageInput.addEventListener('paste', (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (const item of items) {
+            if (item.type.startsWith('image/')) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        showImagePreview(event.target.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+                break;
+            }
+        }
+    });
+
+    // Remove image button
+    removeImageBtn.addEventListener('click', clearImagePreview);
+
     // Send message
     async function sendMessage() {
         // If generating, stop instead
@@ -434,7 +475,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
 
         let userText = messageInput.value.trim();
-        if (!userText && !selectedText) return;
+        if (!userText && !selectedText && !currentImageData) return;
 
         const { serverAddress, modelName, systemPrompt, apiEndpoint } = await chrome.storage.sync.get(['serverAddress', 'modelName', 'systemPrompt', 'apiEndpoint']);
         if (!serverAddress || !modelName) {
@@ -494,13 +535,32 @@ document.addEventListener('DOMContentLoaded', async function() {
         // Add user message
         const userMessage = document.createElement('div');
         userMessage.className = 'message user';
+
+        // Show image thumbnail in user message if present
+        if (currentImageData) {
+            const imgThumb = document.createElement('img');
+            imgThumb.src = currentImageData;
+            imgThumb.style.cssText = 'max-width: 100%; max-height: 100px; border-radius: 8px; margin-bottom: 8px; display: block;';
+            userMessage.appendChild(imgThumb);
+        }
+
         let displayText = userText;
         if (!displayText && selectedText) {
             const contextType = currentContext.type === 'youtube' ? 'video' : currentContext.type === 'page' ? 'page' : 'selection';
             displayText = `[${action}: ${contextType}]`;
         }
-        userMessage.textContent = displayText || `[${action}]`;
+        if (!displayText && currentImageData) {
+            displayText = '[Image]';
+        }
+        if (displayText) {
+            const textSpan = document.createElement('span');
+            textSpan.textContent = displayText;
+            userMessage.appendChild(textSpan);
+        }
         chatContainer.appendChild(userMessage);
+
+        // Store image data before clearing
+        const imageToSend = currentImageData;
 
         // Clear input and context
         messageInput.value = '';
@@ -508,6 +568,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         selectedText = '';
         currentContext = { type: 'none', content: '' };
         selectionIndicator.classList.remove('visible');
+        clearImagePreview();
 
         // Add assistant message placeholder
         currentAssistantMessage = document.createElement('div');
@@ -529,6 +590,7 @@ document.addEventListener('DOMContentLoaded', async function() {
             prompt,
             systemPrompt,
             apiEndpoint,
+            imageData: imageToSend,
             includeHistory: action === 'chat'
         });
     }

@@ -11,6 +11,7 @@
     },
     "permissions": [
       "activeTab",
+      "tabs",
       "scripting",
       "storage",
       "sidePanel",
@@ -18,10 +19,7 @@
       "declarativeNetRequestWithHostAccess"
     ],
     "host_permissions": [
-      "http://localhost/*",
-      "http://127.0.0.1/*",
-      "http://*/*",
-      "https://*/*"
+      "<all_urls>"
     ],
     "declarative_net_request": {
       "rule_resources": [{

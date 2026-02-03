@@ -374,6 +374,50 @@
       font-size: 12px;
       color: var(--text-secondary);
     }
+
+    /* Image preview */
+    .image-preview {
+      display: none;
+      position: relative;
+      margin-bottom: 8px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+
+    .image-preview.visible {
+      display: block;
+    }
+
+    .image-preview img {
+      max-width: 100%;
+      max-height: 150px;
+      display: block;
+    }
+
+    .remove-image-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(0, 0, 0, 0.6);
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+
+    .remove-image-btn:hover {
+      background: rgba(0, 0, 0, 0.8);
+    }
+
   </style>
 </head>
 <body>
@@ -407,10 +451,14 @@
     <div class="selection-indicator" id="selectionIndicator">
       <strong>Selected:</strong> <span id="selectionPreview"></span>
     </div>
+    <div class="image-preview" id="imagePreview">
+      <img id="previewImg" src="" alt="Preview">
+      <button class="remove-image-btn" id="removeImageBtn">&times;</button>
+    </div>
     <div class="input-wrapper">
       <div class="input-box">
         <div class="autocomplete-container">
-          <textarea id="messageInput" placeholder="Ask anything or use /summarize, /explain..." rows="1"></textarea>
+          <textarea id="messageInput" placeholder="Use /commands or Ctrl+V to paste images" rows="1"></textarea>
           <div class="autocomplete-dropdown" id="autocompleteDropdown"></div>
         </div>
         <div class="input-actions">

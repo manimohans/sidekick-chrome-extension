@@ -34,7 +34,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 async function handleChatCompletion(request) {
-    const { serverAddress: rawAddress, modelName, prompt, includeHistory, systemPrompt, apiEndpoint } = request;
+    const { serverAddress: rawAddress, modelName, prompt, includeHistory, systemPrompt, apiEndpoint, imageData } = request;
 
     // Remove trailing slash from server address
     const serverAddress = rawAddress.replace(/\/+$/, '');
@@ -45,8 +45,8 @@ async function handleChatCompletion(request) {
     try {
         let endpoint, body;
 
-        if (apiEndpoint === 'responses') {
-            // Responses API format
+        if (apiEndpoint === 'responses' && !imageData) {
+            // Responses API format (text only, no image support)
             endpoint = `${serverAddress}/v1/responses`;
             let input = prompt;
             if (systemPrompt && systemPrompt.trim()) {
@@ -72,7 +72,17 @@ async function handleChatCompletion(request) {
                 messages = [...messages, ...history];
             }
 
-            messages.push({ role: 'user', content: prompt });
+            // Build user message (with optional image for vision models)
+            if (imageData) {
+                // OpenAI vision format for /v1/chat/completions
+                const content = [
+                    { type: 'text', text: prompt || 'What is in this image?' },
+                    { type: 'image_url', image_url: { url: imageData } }
+                ];
+                messages.push({ role: 'user', content: content });
+            } else {
+                messages.push({ role: 'user', content: prompt });
+            }
             body = JSON.stringify({
                 model: modelName,
                 messages: messages,
@@ -153,7 +163,20 @@ async function handleChatCompletion(request) {
         if (error.name === 'AbortError') {
             chrome.runtime.sendMessage({ type: 'streamEnd' }).catch(() => {});
         } else {
-            chrome.runtime.sendMessage({ type: 'streamError', error: error.message }).catch(() => {});
+            // Provide user-friendly error messages
+            let friendlyError = error.message;
+
+            if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                friendlyError = 'Cannot connect to server. Is your LLM server running?';
+            } else if (error.message.includes('Failed to parse URL')) {
+                friendlyError = 'Invalid server address. Please check your settings.';
+            } else if (error.message.includes('net::ERR_CONNECTION_REFUSED')) {
+                friendlyError = 'Connection refused. Is your LLM server running?';
+            } else if (error.message.includes('net::ERR_NAME_NOT_RESOLVED')) {
+                friendlyError = 'Server not found. Please check the address.';
+            }
+
+            chrome.runtime.sendMessage({ type: 'streamError', error: friendlyError }).catch(() => {});
         }
     } finally {
         currentController = null;
