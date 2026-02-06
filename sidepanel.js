@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     const personaBadgeName = document.getElementById('personaBadgeName');
     const personaBadgeDismiss = document.getElementById('personaBadgeDismiss');
 
+    const speedIndicator = document.getElementById('speedIndicator');
+    const speedValue = document.getElementById('speedValue');
+
     let currentAssistantMessage = null;
     let autocompleteIndex = -1;
     let currentImageData = null; // Base64 image data
@@ -25,6 +28,9 @@ document.addEventListener('DOMContentLoaded', async function() {
     let isGenerating = false;
     let activePersona = null;
     let personaDismissedForDomain = null;
+    let tokenCount = 0;
+    let streamStartTime = 0;
+    let speedInterval = null;
 
     // Check if configured
     const { serverAddress, modelName } = await chrome.storage.sync.get(['serverAddress', 'modelName']);
@@ -462,11 +468,75 @@ document.addEventListener('DOMContentLoaded', async function() {
         return result;
     }
 
+    // Token speed tracking
+    const speedLabel = document.getElementById('speedLabel');
+    const warmupMessages = [
+        'Poking the model...',
+        'Poking harder...',
+        'Any second now...',
+        'Still poking...',
+        'Warming the chair...',
+        'Bribing with tokens...',
+    ];
+    let warmupIndex = 0;
+    let warmupInterval = null;
+    let firstTokenReceived = false;
+
+    function startSpeedTracking() {
+        tokenCount = 0;
+        streamStartTime = performance.now();
+        firstTokenReceived = false;
+        warmupIndex = 0;
+        speedLabel.textContent = warmupMessages[0];
+        speedIndicator.classList.add('visible');
+        // Rotate warmup messages every 3s
+        warmupInterval = setInterval(() => {
+            if (!firstTokenReceived) {
+                warmupIndex = (warmupIndex + 1) % warmupMessages.length;
+                speedLabel.textContent = warmupMessages[warmupIndex];
+            }
+        }, 3000);
+    }
+
+    function onFirstToken() {
+        firstTokenReceived = true;
+        clearInterval(warmupInterval);
+        warmupInterval = null;
+        // Switch to tok/s display
+        streamStartTime = performance.now();
+        tokenCount = 1;
+        speedLabel.innerHTML = '<span class="speed-value" id="speedValue">0</span> tok/s';
+        speedInterval = setInterval(updateSpeed, 1000);
+    }
+
+    function updateSpeed() {
+        const elapsed = (performance.now() - streamStartTime) / 1000;
+        if (elapsed > 0 && tokenCount > 0) {
+            const tps = tokenCount / elapsed;
+            const el = document.getElementById('speedValue');
+            if (el) el.textContent = tps >= 10 ? Math.round(tps) : tps.toFixed(1);
+        }
+    }
+
+    function stopSpeedTracking() {
+        if (firstTokenReceived) updateSpeed();
+        clearInterval(speedInterval);
+        clearInterval(warmupInterval);
+        speedInterval = null;
+        warmupInterval = null;
+        // Keep visible for 3s after streaming ends so user can see final speed
+        setTimeout(() => {
+            if (!isGenerating) speedIndicator.classList.remove('visible');
+        }, 3000);
+    }
+
     // Listen for streaming messages
     chrome.runtime.onMessage.addListener((message) => {
         if (message.type === 'streamChunk') {
             if (currentAssistantMessage) {
                 streamText += message.content;
+                if (!firstTokenReceived) onFirstToken();
+                else tokenCount++;
                 currentAssistantMessage.innerHTML = formatThinkingTokens(streamText);
                 // Auto-scroll thinking block content to bottom
                 const openBlock = currentAssistantMessage.querySelector('.thinking-block[open] .thinking-content');
@@ -474,8 +544,10 @@ document.addEventListener('DOMContentLoaded', async function() {
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
         } else if (message.type === 'streamEnd') {
+            if (!isGenerating) return; // ignore duplicate streamEnd
             isGenerating = false;
             updateSendButton();
+            stopSpeedTracking();
             if (currentAssistantMessage) {
                 if (streamText) {
                     currentAssistantMessage.innerHTML = formatThinkingTokens(streamText);
@@ -484,13 +556,16 @@ document.addEventListener('DOMContentLoaded', async function() {
                     currentAssistantMessage.style.color = 'var(--text-secondary)';
                 }
             }
+            currentAssistantMessage = null;
         } else if (message.type === 'streamError') {
             isGenerating = false;
             updateSendButton();
+            stopSpeedTracking();
             if (currentAssistantMessage) {
                 currentAssistantMessage.textContent = `Error: ${message.error}`;
                 currentAssistantMessage.style.color = '#ef4444';
             }
+            currentAssistantMessage = null;
         }
     });
 
@@ -761,6 +836,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         streamText = '';
         isGenerating = true;
         updateSendButton();
+        startSpeedTracking();
 
         // Send to background with history enabled for chat mode
         console.log('[Sidekick] sendMessage prompt:', { systemPrompt: defaultSystemPrompt, prompt });
@@ -997,6 +1073,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         streamText = '';
         isGenerating = true;
         updateSendButton();
+        startSpeedTracking();
 
         console.log('[Sidekick] multiTab prompt:', { systemPrompt: defaultSystemPrompt, prompt });
         chrome.runtime.sendMessage({

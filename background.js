@@ -15,7 +15,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (currentController) {
             currentController.abort();
             currentController = null;
-            chrome.runtime.sendMessage({ type: 'streamEnd' }).catch(() => {});
+            // streamEnd will be sent by the AbortError catch in handleChatCompletion
         }
         return false;
     }
