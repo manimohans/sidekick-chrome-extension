@@ -436,6 +436,73 @@
       background: rgba(0, 0, 0, 0.8);
     }
 
+    /* Thinking blocks */
+    .thinking-block {
+      margin: 6px 0;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      overflow: hidden;
+      font-size: 13px;
+    }
+
+    .thinking-block summary {
+      padding: 6px 10px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .thinking-block summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .thinking-block summary::before {
+      content: '▶';
+      font-size: 9px;
+      transition: transform 0.2s;
+    }
+
+    .thinking-block[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    .thinking-block .thinking-content {
+      padding: 8px 12px;
+      border-top: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.5;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .thinking-spinner {
+      display: inline-flex;
+      gap: 3px;
+      vertical-align: middle;
+      margin-left: 2px;
+    }
+
+    .thinking-spinner span {
+      width: 4px;
+      height: 4px;
+      background: var(--text-secondary);
+      border-radius: 50%;
+      animation: bounce 1.4s infinite ease-in-out both;
+    }
+
+    .thinking-spinner span:nth-child(1) { animation-delay: -0.32s; }
+    .thinking-spinner span:nth-child(2) { animation-delay: -0.16s; }
+
     /* Persona badge */
     .persona-badge {
       display: none;

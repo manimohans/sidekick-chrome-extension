@@ -410,20 +410,79 @@ document.addEventListener('DOMContentLoaded', async function() {
     checkContext();
     checkPersona();
 
+    // Format LLM thinking/reasoning tokens into collapsible blocks
+    // Handles: <think>, <thinking>, [THINK], [THINKING] and their closing variants
+    const THINK_OPEN = /(<think(?:ing)?>|\[THINK(?:ING)?\])/gi;
+    const THINK_CLOSE = /(<\/think(?:ing)?>|\[\/THINK(?:ING)?\])/gi;
+
+    function formatThinkingTokens(text) {
+        let result = '';
+        let lastIndex = 0;
+        let insideThink = false;
+        let thinkContent = '';
+
+        // Reset and scan through the text
+        const combined = /(<\/?think(?:ing)?>|\[\/?THINK(?:ING)?\])/gi;
+        let match;
+
+        while ((match = combined.exec(text)) !== null) {
+            const tag = match[0];
+            const isClose = tag.startsWith('</') || tag.startsWith('[/');
+
+            if (!isClose && !insideThink) {
+                // Opening tag — render everything before it as markdown
+                const before = text.slice(lastIndex, match.index);
+                if (before.trim()) result += marked.parse(before);
+                insideThink = true;
+                thinkContent = '';
+                lastIndex = match.index + tag.length;
+            } else if (isClose && insideThink) {
+                // Closing tag — wrap thinking content in collapsible
+                thinkContent = text.slice(lastIndex, match.index).trim();
+                if (thinkContent) {
+                    const escaped = thinkContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    result += `<details class="thinking-block"><summary>Thinking</summary><div class="thinking-content">${escaped}</div></details>`;
+                }
+                insideThink = false;
+                lastIndex = match.index + tag.length;
+            }
+        }
+
+        // Handle remaining text
+        const remaining = text.slice(lastIndex);
+        if (insideThink) {
+            // Still streaming inside a thinking block
+            const escaped = remaining.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const spinner = '<span class="thinking-spinner"><span></span><span></span><span></span></span>';
+            result += `<details class="thinking-block" open><summary>Thinking ${spinner}</summary><div class="thinking-content">${escaped}</div></details>`;
+        } else if (remaining.trim()) {
+            result += marked.parse(remaining);
+        }
+
+        return result;
+    }
+
     // Listen for streaming messages
     chrome.runtime.onMessage.addListener((message) => {
         if (message.type === 'streamChunk') {
             if (currentAssistantMessage) {
                 streamText += message.content;
-                currentAssistantMessage.innerHTML = marked.parse(streamText);
+                currentAssistantMessage.innerHTML = formatThinkingTokens(streamText);
+                // Auto-scroll thinking block content to bottom
+                const openBlock = currentAssistantMessage.querySelector('.thinking-block[open] .thinking-content');
+                if (openBlock) openBlock.scrollTop = openBlock.scrollHeight;
                 chatContainer.scrollTop = chatContainer.scrollHeight;
             }
         } else if (message.type === 'streamEnd') {
             isGenerating = false;
             updateSendButton();
-            if (currentAssistantMessage && !streamText) {
-                currentAssistantMessage.textContent = 'Stopped.';
-                currentAssistantMessage.style.color = 'var(--text-secondary)';
+            if (currentAssistantMessage) {
+                if (streamText) {
+                    currentAssistantMessage.innerHTML = formatThinkingTokens(streamText);
+                } else {
+                    currentAssistantMessage.textContent = 'Stopped.';
+                    currentAssistantMessage.style.color = 'var(--text-secondary)';
+                }
             }
         } else if (message.type === 'streamError') {
             isGenerating = false;
