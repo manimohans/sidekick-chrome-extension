@@ -13,12 +13,18 @@ document.addEventListener('DOMContentLoaded', async function() {
     const previewImg = document.getElementById('previewImg');
     const removeImageBtn = document.getElementById('removeImageBtn');
 
+    const personaBadge = document.getElementById('personaBadge');
+    const personaBadgeName = document.getElementById('personaBadgeName');
+    const personaBadgeDismiss = document.getElementById('personaBadgeDismiss');
+
     let currentAssistantMessage = null;
     let autocompleteIndex = -1;
     let currentImageData = null; // Base64 image data
     let streamText = '';
     let selectedText = '';
     let isGenerating = false;
+    let activePersona = null;
+    let personaDismissedForDomain = null;
 
     // Check if configured
     const { serverAddress, modelName } = await chrome.storage.sync.get(['serverAddress', 'modelName']);
@@ -74,6 +80,118 @@ document.addEventListener('DOMContentLoaded', async function() {
             return null;
         }
     }
+
+    // Persona matching
+    function getDomain(url) {
+        try { return new URL(url).hostname; } catch { return ''; }
+    }
+
+    function matchUrlPattern(pattern, url) {
+        const domain = getDomain(url);
+        if (!domain) return false;
+        pattern = pattern.trim().toLowerCase();
+        const lowerDomain = domain.toLowerCase();
+        if (pattern.startsWith('*.')) {
+            const suffix = pattern.slice(2);
+            return lowerDomain === suffix || lowerDomain.endsWith('.' + suffix);
+        }
+        return lowerDomain === pattern;
+    }
+
+    const DEFAULT_PERSONAS = [
+        {
+            id: 'default-github',
+            name: 'Code Reviewer',
+            systemPrompt: 'You are a senior code reviewer. Focus on bugs, security issues, performance problems, and readability. Be concise and direct. When suggesting fixes, show the corrected code.',
+            urlPatterns: ['github.com', '*.github.com', 'gitlab.com', '*.gitlab.com']
+        },
+        {
+            id: 'default-stackoverflow',
+            name: 'Tech Explainer',
+            systemPrompt: 'You are a patient technical explainer. Give clear, practical answers with code examples when relevant. Mention common pitfalls. Prefer standard library solutions over third-party dependencies.',
+            urlPatterns: ['stackoverflow.com', '*.stackexchange.com']
+        },
+        {
+            id: 'default-youtube',
+            name: 'Video Summarizer',
+            systemPrompt: 'You are a video content analyst. Summarize key points clearly with timestamps when available. Extract actionable takeaways and highlight the most important claims or arguments made.',
+            urlPatterns: ['youtube.com', 'www.youtube.com', 'youtu.be']
+        },
+        {
+            id: 'default-reddit',
+            name: 'Discussion Analyst',
+            systemPrompt: 'You are a discussion analyst. Identify the main arguments, points of consensus, and areas of disagreement. Separate facts from opinions. Note the overall sentiment and any notable minority viewpoints.',
+            urlPatterns: ['reddit.com', '*.reddit.com']
+        },
+        {
+            id: 'default-wikipedia',
+            name: 'Research Assistant',
+            systemPrompt: 'You are a research assistant. Help synthesize information, identify key concepts, and explain complex topics in accessible language. Cross-reference claims when possible and note areas of uncertainty.',
+            urlPatterns: ['*.wikipedia.org']
+        },
+        {
+            id: 'default-twitter',
+            name: 'Social Analyst',
+            systemPrompt: 'You are a social media analyst. Help contextualize posts, threads, and discussions. Identify key claims, check for logical fallacies, and provide relevant background context.',
+            urlPatterns: ['twitter.com', 'x.com']
+        }
+    ];
+
+    async function seedDefaultPersonas() {
+        const result = await chrome.storage.local.get('personasSeeded');
+        if (!result.personasSeeded) {
+            await chrome.storage.local.set({ personas: DEFAULT_PERSONAS, personasSeeded: true });
+        }
+    }
+    seedDefaultPersonas();
+
+    async function checkPersona() {
+        const tab = await getCurrentTab();
+        if (!tab?.url) {
+            activePersona = null;
+            personaBadge.classList.remove('visible');
+            return;
+        }
+
+        const currentDomain = getDomain(tab.url);
+
+        // If navigated to a different domain, reset dismissed state
+        if (personaDismissedForDomain && currentDomain !== personaDismissedForDomain) {
+            personaDismissedForDomain = null;
+        }
+
+        // If dismissed for this domain, hide badge
+        if (personaDismissedForDomain === currentDomain) {
+            activePersona = null;
+            personaBadge.classList.remove('visible');
+            return;
+        }
+
+        const result = await chrome.storage.local.get('personas');
+        const personas = result.personas || [];
+
+        const matched = personas.find(p =>
+            p.urlPatterns.some(pat => matchUrlPattern(pat, tab.url))
+        );
+
+        if (matched) {
+            activePersona = matched;
+            personaBadgeName.textContent = matched.name;
+            personaBadge.classList.add('visible');
+        } else {
+            activePersona = null;
+            personaBadge.classList.remove('visible');
+        }
+    }
+
+    personaBadgeDismiss.addEventListener('click', async () => {
+        const tab = await getCurrentTab();
+        if (tab?.url) {
+            personaDismissedForDomain = getDomain(tab.url);
+        }
+        activePersona = null;
+        personaBadge.classList.remove('visible');
+    });
 
     // Check if URL is a YouTube video
     function isYouTubeVideo(url) {
@@ -214,6 +332,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (tab && tab.url !== lastTabUrl) {
             lastTabUrl = tab.url;
             contextDismissed = false;
+            checkPersona();
         }
 
         // Check for new selection - if user selects text, un-dismiss
@@ -289,6 +408,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     window.addEventListener('focus', checkContext);
     setInterval(checkContext, 3000);
     checkContext();
+    checkPersona();
 
     // Listen for streaming messages
     chrome.runtime.onMessage.addListener((message) => {
@@ -301,6 +421,10 @@ document.addEventListener('DOMContentLoaded', async function() {
         } else if (message.type === 'streamEnd') {
             isGenerating = false;
             updateSendButton();
+            if (currentAssistantMessage && !streamText) {
+                currentAssistantMessage.textContent = 'Stopped.';
+                currentAssistantMessage.style.color = 'var(--text-secondary)';
+            }
         } else if (message.type === 'streamError') {
             isGenerating = false;
             updateSendButton();
@@ -477,12 +601,11 @@ document.addEventListener('DOMContentLoaded', async function() {
         let userText = messageInput.value.trim();
         if (!userText && !selectedText && !currentImageData) return;
 
-        const { serverAddress, modelName, systemPrompt, apiEndpoint } = await chrome.storage.sync.get(['serverAddress', 'modelName', 'systemPrompt', 'apiEndpoint']);
+        const { serverAddress, modelName, systemPrompt: defaultSystemPrompt, apiEndpoint } = await chrome.storage.sync.get(['serverAddress', 'modelName', 'systemPrompt', 'apiEndpoint']);
         if (!serverAddress || !modelName) {
             showNotConfigured();
             return;
         }
-
         // Hide welcome
         const welcomeEl = document.getElementById('welcome');
         if (welcomeEl) welcomeEl.style.display = 'none';
@@ -496,8 +619,30 @@ document.addEventListener('DOMContentLoaded', async function() {
             actionSelect.value = action; // Update dropdown to match
         }
 
-        // Build prompt based on action
-        let prompt = '';
+        // Build prompt: user query → persona → context
+        let query = '';
+        const actionPrompts = {
+            summarize: 'Summarize the following:',
+            professional: 'Make this more professional:',
+            actionItems: 'Generate action items from:',
+            twitterThread: 'Convert to a Twitter thread (280 chars per tweet):',
+            explain: 'Explain this:'
+        };
+
+        if (action === 'chat') {
+            query = userText;
+        } else if (userText && selectedText) {
+            query = userText;
+        } else if (selectedText) {
+            query = actionPrompts[action] || userText;
+        } else {
+            query = `${actionPrompts[action] || ''}\n\n${userText}`;
+        }
+
+        const personaNote = activePersona
+            ? `\n\n[Style hint (${activePersona.name}): ${activePersona.systemPrompt} — Apply this style only if relevant to the user's request above.]`
+            : '';
+
         let contextLabel = '';
         switch (currentContext.type) {
             case 'selection': contextLabel = 'selected text'; break;
@@ -506,31 +651,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         }
         const context = selectedText ? `\n\nContext (${contextLabel}):\n${selectedText}` : '';
 
-        switch(action) {
-            case 'summarize':
-                prompt = `Summarize the following:${context || '\n\n' + userText}`;
-                if (userText && selectedText) prompt = `${userText}${context}`;
-                break;
-            case 'professional':
-                prompt = `Make this more professional:${context || '\n\n' + userText}`;
-                if (userText && selectedText) prompt = `${userText}${context}`;
-                break;
-            case 'actionItems':
-                prompt = `Generate action items from:${context || '\n\n' + userText}`;
-                if (userText && selectedText) prompt = `${userText}${context}`;
-                break;
-            case 'twitterThread':
-                prompt = `Convert to a Twitter thread (280 chars per tweet):${context || '\n\n' + userText}`;
-                if (userText && selectedText) prompt = `${userText}${context}`;
-                break;
-            case 'explain':
-                prompt = `Explain this:${context || '\n\n' + userText}`;
-                if (userText && selectedText) prompt = `${userText}${context}`;
-                break;
-            default: // chat
-                prompt = userText + context;
-                break;
-        }
+        const prompt = query + personaNote + context;
 
         // Add user message
         const userMessage = document.createElement('div');
@@ -583,12 +704,13 @@ document.addEventListener('DOMContentLoaded', async function() {
         updateSendButton();
 
         // Send to background with history enabled for chat mode
+        console.log('[Sidekick] sendMessage prompt:', { systemPrompt: defaultSystemPrompt, prompt });
         chrome.runtime.sendMessage({
             action: 'chatCompletion',
             serverAddress,
             modelName,
             prompt,
-            systemPrompt,
+            systemPrompt: defaultSystemPrompt,
             apiEndpoint,
             imageData: imageToSend,
             includeHistory: action === 'chat'
@@ -646,4 +768,193 @@ document.addEventListener('DOMContentLoaded', async function() {
             chrome.runtime.openOptionsPage();
         });
     }
+
+    // --- Multi-Tab Compare ---
+    const compareBtn = document.getElementById('compareBtn');
+    const tabPickerOverlay = document.getElementById('tabPickerOverlay');
+    const tabPickerList = document.getElementById('tabPickerList');
+    const tabCountBadge = document.getElementById('tabCountBadge');
+    const tabPickerCancel = document.getElementById('tabPickerCancel');
+    const tabPickerCompare = document.getElementById('tabPickerCompare');
+    const compareInstructions = document.getElementById('compareInstructions');
+    let selectedTabIds = new Set();
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    async function openTabPicker() {
+        const tabs = await chrome.tabs.query({ currentWindow: true });
+        selectedTabIds.clear();
+        tabPickerList.innerHTML = '';
+
+        tabs.forEach(tab => {
+            if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
+            const row = document.createElement('div');
+            row.className = 'tab-picker-row';
+            row.dataset.tabId = tab.id;
+
+            const favicon = tab.favIconUrl
+                ? `<img class="tab-picker-favicon" src="${escapeHtml(tab.favIconUrl)}" onerror="this.style.display='none'">`
+                : `<div class="tab-picker-favicon" style="background:var(--border);border-radius:2px;"></div>`;
+
+            const displayUrl = tab.url.length > 60 ? tab.url.substring(0, 60) + '...' : tab.url;
+            row.innerHTML = `
+                <input type="checkbox" data-tab-id="${tab.id}">
+                ${favicon}
+                <div class="tab-picker-info">
+                    <div class="tab-picker-title">${escapeHtml(tab.title || 'Untitled')}</div>
+                    <div class="tab-picker-url">${escapeHtml(displayUrl)}</div>
+                </div>
+            `;
+            row.addEventListener('click', (e) => {
+                if (e.target.tagName === 'INPUT') return;
+                const cb = row.querySelector('input[type="checkbox"]');
+                cb.checked = !cb.checked;
+                cb.dispatchEvent(new Event('change'));
+            });
+            row.querySelector('input').addEventListener('change', (e) => {
+                const id = Number(e.target.dataset.tabId);
+                if (e.target.checked) {
+                    if (selectedTabIds.size >= 6) {
+                        e.target.checked = false;
+                        return;
+                    }
+                    selectedTabIds.add(id);
+                    row.classList.add('selected');
+                } else {
+                    selectedTabIds.delete(id);
+                    row.classList.remove('selected');
+                }
+                updateTabPickerState();
+            });
+            tabPickerList.appendChild(row);
+        });
+
+        compareInstructions.value = '';
+        updateTabPickerState();
+        tabPickerOverlay.classList.add('visible');
+    }
+
+    function updateTabPickerState() {
+        const count = selectedTabIds.size;
+        tabCountBadge.textContent = count;
+        tabPickerCompare.disabled = count < 1;
+        tabPickerCompare.textContent = count >= 1 ? `Send (${count} tab${count > 1 ? 's' : ''})` : 'Send';
+    }
+
+    function closeTabPicker() {
+        tabPickerOverlay.classList.remove('visible');
+    }
+
+    async function executeCompare() {
+        const tabIds = Array.from(selectedTabIds);
+        const instructions = compareInstructions.value.trim();
+        closeTabPicker();
+
+        // Hide welcome
+        const welcomeEl = document.getElementById('welcome');
+        if (welcomeEl) welcomeEl.style.display = 'none';
+
+        // User message
+        const userMessage = document.createElement('div');
+        userMessage.className = 'message user';
+        const tabLabel = `${tabIds.length} tab${tabIds.length > 1 ? 's' : ''}`;
+        const label = instructions ? `[${tabLabel}] ${instructions}` : `[${tabLabel}] Analyze these pages`;
+        userMessage.textContent = label;
+        chatContainer.appendChild(userMessage);
+
+        // Assistant placeholder
+        currentAssistantMessage = document.createElement('div');
+        currentAssistantMessage.className = 'message assistant';
+        currentAssistantMessage.innerHTML = '<div class="typing"><span></span><span></span><span></span></div>';
+        chatContainer.appendChild(currentAssistantMessage);
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+        // Extract content from each tab
+        const pages = [];
+        const errors = [];
+
+        for (const tabId of tabIds) {
+            try {
+                const tab = await chrome.tabs.get(tabId);
+                const [{ result }] = await chrome.scripting.executeScript({
+                    target: { tabId },
+                    function: () => {
+                        const clone = document.body.cloneNode(true);
+                        ['script', 'style', 'nav', 'footer', 'header', 'aside', 'noscript', 'iframe']
+                            .forEach(sel => clone.querySelectorAll(sel).forEach(el => el.remove()));
+                        let text = (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').trim();
+                        if (text.length > 5000) text = text.substring(0, 5000) + '... [truncated]';
+                        return text;
+                    }
+                });
+                if (result) {
+                    pages.push({ title: tab.title || 'Untitled', url: tab.url, content: result });
+                } else {
+                    errors.push(tab.title || 'Untitled');
+                }
+            } catch (e) {
+                errors.push(`Tab ${tabId} (unavailable)`);
+            }
+        }
+
+        if (pages.length < 1) {
+            currentAssistantMessage.textContent = `Could not extract content from any tabs. ${errors.length ? 'Failed: ' + errors.join(', ') : ''}`;
+            currentAssistantMessage.style.color = '#ef4444';
+            return;
+        }
+
+        // Build prompt: user query → persona → page contents
+        const defaultInstructions = pages.length > 1
+            ? 'Analyze the following pages. Compare their content, highlight key similarities and differences, and provide notable insights.'
+            : 'Analyze the following page and provide a detailed summary with key insights.';
+
+        let prompt = (instructions || defaultInstructions);
+
+        if (activePersona) {
+            prompt += `\n\n[Style hint (${activePersona.name}): ${activePersona.systemPrompt} — Apply this style only if relevant to the user's request above.]`;
+        }
+
+        prompt += '\n\n';
+        pages.forEach((p, i) => {
+            prompt += `--- Page ${i + 1}: ${p.title} (${p.url}) ---\n${p.content}\n\n`;
+        });
+
+        if (errors.length) {
+            prompt += `Note: Could not extract content from: ${errors.join(', ')}\n`;
+        }
+
+        // Get settings
+        const { serverAddress, modelName, systemPrompt: defaultSystemPrompt, apiEndpoint } = await chrome.storage.sync.get(['serverAddress', 'modelName', 'systemPrompt', 'apiEndpoint']);
+        if (!serverAddress || !modelName) {
+            currentAssistantMessage.textContent = 'Please configure your LLM server first.';
+            currentAssistantMessage.style.color = '#ef4444';
+            return;
+        }
+
+        streamText = '';
+        isGenerating = true;
+        updateSendButton();
+
+        console.log('[Sidekick] multiTab prompt:', { systemPrompt: defaultSystemPrompt, prompt });
+        chrome.runtime.sendMessage({
+            action: 'chatCompletion',
+            serverAddress,
+            modelName,
+            prompt,
+            systemPrompt: defaultSystemPrompt,
+            apiEndpoint,
+            includeHistory: false
+        });
+    }
+
+    compareBtn.addEventListener('click', openTabPicker);
+    tabPickerCancel.addEventListener('click', closeTabPicker);
+    tabPickerCompare.addEventListener('click', executeCompare);
+    tabPickerOverlay.addEventListener('click', (e) => {
+        if (e.target === tabPickerOverlay) closeTabPicker();
+    });
 });
