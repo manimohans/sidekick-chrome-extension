@@ -21,7 +21,8 @@ Most AI extensions send your data to the cloud and treat every website the same.
 - YouTube transcript extraction built-in
 - Select any text and ask about it
 - Slash commands: /summarize, /explain, /professional, /actions, /twitter
-- Real-time streaming with conversation history
+- Real-time streaming with conversation history and live tok/s speed counter
+- Collapsible thinking token display for reasoning models (DeepSeek, QwQ, etc.)
 - Image paste support for vision models
 - 6 built-in personas, fully customizable
 

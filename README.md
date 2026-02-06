@@ -30,6 +30,8 @@ Sidekick is a Chrome extension that connects to your locally-running AI models. 
 - **Auto Page Context** — Automatically reads page content and YouTube transcripts
 - **Text Selection** — Select text on any page to use as context
 - **Slash Commands** — Quick actions like `/summarize`, `/explain`, `/professional`
+- **Thinking Token Display** — Collapsible blocks for reasoning models (DeepSeek, QwQ, etc.)
+- **Live tok/s Counter** — Real-time speed indicator in the header while streaming
 - **Streaming Responses** — Real-time token streaming with stop button
 - **Conversation History** — Maintains context for natural back-and-forth dialogue
 - **Image Support** — Paste images for vision models
