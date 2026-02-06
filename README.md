@@ -5,37 +5,71 @@
 <h1 align="center">Sidekick - Local AI Assistant</h1>
 
 <p align="center">
-  <strong>Chat with your local LLM right from your browser sidebar</strong>
+  <strong>The only local AI sidebar with per-site personas and multi-tab queries</strong>
 </p>
 
 <p align="center">
   <a href="#features">Features</a> •
+  <a href="#per-site-personas">Personas</a> •
+  <a href="#multi-tab-queries">Multi-Tab</a> •
   <a href="#installation">Installation</a> •
   <a href="#setup">Setup</a> •
-  <a href="#usage">Usage</a> •
   <a href="#supported-servers">Supported Servers</a> •
   <a href="#privacy">Privacy</a>
 </p>
 
 ---
 
-Sidekick is a Chrome extension that connects to your locally-running AI models. Get AI assistance while browsing — summarize articles, explain content, draft professional text, and more — all without sending data to the cloud.
+Sidekick is a Chrome extension that connects to your locally-running AI models. It automatically adapts to the website you're on, lets you query across multiple tabs at once, and never sends a byte to the cloud.
 
 ## Features
 
+- **Per-Site Personas** — Auto-activating AI personalities based on the website (see below)
+- **Multi-Tab Queries** — Select multiple tabs and ask anything across all of them (see below)
 - **Sidebar Interface** — Chat with AI without leaving your current tab
 - **Auto Page Context** — Automatically reads page content and YouTube transcripts
 - **Text Selection** — Select text on any page to use as context
 - **Slash Commands** — Quick actions like `/summarize`, `/explain`, `/professional`
-- **Streaming Responses** — See responses as they're generated in real-time
+- **Streaming Responses** — Real-time token streaming with stop button
 - **Conversation History** — Maintains context for natural back-and-forth dialogue
-- **System Prompt** — Personalize how Sidekick responds
+- **Image Support** — Paste images for vision models
+- **Dark Mode** — Follows your system theme
 - **Multiple API Formats** — Supports both Chat Completions and Responses API
+
+## Per-Site Personas
+
+Sidekick automatically switches personality based on the website you're on. A small badge appears in the sidebar header showing the active persona.
+
+**6 built-in personas:**
+
+| Site | Persona | Behavior |
+|------|---------|----------|
+| GitHub, GitLab | Code Reviewer | Focuses on bugs, security, performance |
+| Stack Overflow | Tech Explainer | Practical answers with code examples |
+| YouTube | Video Summarizer | Key points and actionable takeaways |
+| Reddit | Discussion Analyst | Arguments, consensus, sentiment |
+| Wikipedia | Research Assistant | Synthesis and accessible explanations |
+| Twitter/X | Social Analyst | Context, claims, logical fallacies |
+
+Personas are fully customizable — create your own in Settings for any URL pattern. Use exact domains (`github.com`) or wildcards (`*.google.com`).
+
+Click the X on the badge to dismiss a persona for the current site.
+
+## Multi-Tab Queries
+
+Select multiple open tabs and ask anything across all of them in one prompt.
+
+1. Click the **stack icon** in the sidebar header
+2. Check the tabs you want (1–6 tabs)
+3. Type your question (or leave blank for auto-analysis)
+4. Click **Send**
+
+Use cases: compare products, summarize research, find common themes, extract data across pages.
 
 ## Installation
 
 ### From Chrome Web Store
-Coming soon
+[Install Sidekick](https://chromewebstore.google.com/detail/sidekick-local-ai-assista/mddjmpjlfkbfgjlplhhffjinikjfdbhb)
 
 ### Manual Installation (Developer Mode)
 1. Download or clone this repository
@@ -92,8 +126,6 @@ Sidekick supports two API formats:
 | [AnythingLLM](https://anythingllm.com) | varies |
 
 ## Privacy
-
-Sidekick is designed with privacy as a core principle:
 
 - **100% Local** — All conversations stay between you and your local server
 - **No Cloud** — No data is sent to external services
