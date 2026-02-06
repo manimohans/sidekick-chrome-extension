@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Sidekick - Local AI Assistant",
-    "version": "2.0",
+    "version": "2.1",
     "description": "Chat with your local LLM right from your browser. Works with Ollama, LM Studio, and any OpenAI-compatible server.",
     "icons": {
         "16": "icons/icon16.png",
